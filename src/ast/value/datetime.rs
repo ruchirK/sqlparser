@@ -133,6 +133,8 @@ impl IntervalValue {
             DateTimeField::Hour => self.parsed.hour,
             DateTimeField::Minute => self.parsed.minute,
             DateTimeField::Second => self.parsed.second,
+            // TODO trigger an error here
+            DateTimeField::TimezoneOffsetSecond => Some(0),
         }
     }
 
@@ -297,6 +299,7 @@ pub struct ParsedDateTime {
     pub minute: Option<u64>,
     pub second: Option<u64>,
     pub nano: Option<u32>,
+    pub timezone_offset_second: Option<i64>,
 }
 
 impl ParsedDateTime {
@@ -320,6 +323,7 @@ impl Default for ParsedDateTime {
             minute: None,
             second: None,
             nano: None,
+            timezone_offset_second: None,
         }
     }
 }
@@ -332,6 +336,7 @@ pub enum DateTimeField {
     Hour,
     Minute,
     Second,
+    TimezoneOffsetSecond,
 }
 
 impl fmt::Display for DateTimeField {
@@ -343,6 +348,7 @@ impl fmt::Display for DateTimeField {
             DateTimeField::Hour => "HOUR",
             DateTimeField::Minute => "MINUTE",
             DateTimeField::Second => "SECOND",
+            DateTimeField::TimezoneOffsetSecond => "TIMEZONE_OFFSET_SECOND",
         })
     }
 }
@@ -365,7 +371,8 @@ impl IntoIterator for DateTimeField {
 /// let mut itr = Hour.into_iter();
 /// assert_eq!(itr.next(), Some(Minute));
 /// assert_eq!(itr.next(), Some(Second));
-/// assert_eq!(itr.next(), None);
+/// assert_eq!(itr.next(), Some(TimezoneOffsetSecond));
+/// assert_eq!(itr.next(), Some(TimezoneOffsetSecond));
 /// ```
 pub struct DateTimeFieldIterator(Option<DateTimeField>);
 
@@ -380,7 +387,8 @@ impl Iterator for DateTimeFieldIterator {
             Some(Day) => Some(Hour),
             Some(Hour) => Some(Minute),
             Some(Minute) => Some(Second),
-            Some(Second) => None,
+            Some(Second) => Some(TimezoneOffsetSecond),
+            Some(TimezoneOffsetSecond) => None,
             None => None,
         };
         self.0.clone()

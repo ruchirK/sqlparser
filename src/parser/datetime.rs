@@ -4,7 +4,21 @@ use crate::parser::{DateTimeField, ParserError};
 pub(crate) fn tokenize_interval(value: &str, tokenize_timezone: bool) -> Result<Vec<IntervalToken>, ParserError> {
     let mut toks = vec![];
     let mut num_buf = String::with_capacity(4);
-    fn parse_num(n: &str, idx: usize) -> Result<IntervalToken, ParserError> {
+    fn parse_num(n: &str, idx: usize, is_fraction: bool) -> Result<IntervalToken, ParserError> {
+        if is_fraction == true {
+            let raw: u32 = n.parse().map_err(|e| {
+                ParserError::ParserError(format!(
+                    "couldn't parse fraction of second {}: {}",
+                    n, e
+                ))
+            })?;
+            // this is guaranteed to be ascii, so len is fine
+            let chars = n.len() as u32;
+            let multiplicand = 1_000_000_000 / 10_u32.pow(chars);
+
+            return Ok(IntervalToken::Nanos(raw * multiplicand));
+       }
+            
         Ok(IntervalToken::Num(n.parse().map_err(|e| {
             ParserError::ParserError(format!(
                 "Unable to parse value as a number at index {}: {}",
@@ -12,33 +26,37 @@ pub(crate) fn tokenize_interval(value: &str, tokenize_timezone: bool) -> Result<
             ))
         })?))
     };
-    let mut last_field_is_frac = false;
+
+    let mut is_frac = false;
     for (i, chr) in value.chars().enumerate() {
         match chr {
             '-' => {
                 // TODO abstract away the number handling functionality to a function
                 // dashes at the beginning mean make it negative
                 if !num_buf.is_empty() {
-                    toks.push(parse_num(&num_buf, i)?);
+                    toks.push(parse_num(&num_buf, i, is_frac)?);
                     num_buf.clear();
                 }
                 toks.push(IntervalToken::Dash);
+                is_frac = false;
             }
             ' ' => {
-                toks.push(parse_num(&num_buf, i)?);
+                toks.push(parse_num(&num_buf, i, is_frac)?);
                 num_buf.clear();
                 toks.push(IntervalToken::Space);
+                is_frac = false;
             }
             ':' => {
-                toks.push(parse_num(&num_buf, i)?);
+                toks.push(parse_num(&num_buf, i, is_frac)?);
                 num_buf.clear();
                 toks.push(IntervalToken::Colon);
+                is_frac = false;
             }
             '.' => {
-                toks.push(parse_num(&num_buf, i)?);
+                toks.push(parse_num(&num_buf, i, is_frac)?);
                 num_buf.clear();
                 toks.push(IntervalToken::Dot);
-                last_field_is_frac = true;
+                is_frac = true;
             }
             '+' => {
                 // Not sure if I need to do more to deal with the fractional bit
@@ -50,9 +68,10 @@ pub(crate) fn tokenize_interval(value: &str, tokenize_timezone: bool) -> Result<
                         i, value, chr
                     )))
                 }
-                toks.push(parse_num(&num_buf, i)?);
+                toks.push(parse_num(&num_buf, i, is_frac)?);
                 num_buf.clear();
                 toks.push(IntervalToken::Plus);
+                is_frac = false;
             }
             chr if chr.is_digit(10) => num_buf.push(chr),
             chr => {
@@ -64,21 +83,7 @@ pub(crate) fn tokenize_interval(value: &str, tokenize_timezone: bool) -> Result<
         }
     }
     if !num_buf.is_empty() {
-        if !last_field_is_frac {
-            toks.push(parse_num(&num_buf, 0)?);
-        } else {
-            let raw: u32 = num_buf.parse().map_err(|e| {
-                ParserError::ParserError(format!(
-                    "couldn't parse fraction of second {}: {}",
-                    num_buf, e
-                ))
-            })?;
-            // this is guaranteed to be ascii, so len is fine
-            let chars = num_buf.len() as u32;
-            let multiplicand = 1_000_000_000 / 10_u32.pow(chars);
-
-            toks.push(IntervalToken::Nanos(raw * multiplicand));
-        }
+        toks.push(parse_num(&num_buf, 0, is_frac)?);
     }
     Ok(toks)
 }
@@ -115,6 +120,8 @@ fn potential_interval_tokens(from: &DateTimeField) -> Vec<IntervalToken> {
         Hour => 6,
         Minute => 8,
         Second => 10,
+        // TODO throw an error here
+        TimezoneOffsetSecond => 0,
     };
     all_toks[offset..].to_vec()
 }
@@ -183,6 +190,8 @@ pub(crate) fn build_parsed_datetime(
                     DateTimeField::Second => {
                         return parser_err!("Too many numbers to parse as a second at {}", val)
                     }
+                    // TODO fix that
+                    DateTimeField::TimezoneOffsetSecond => pdt.timezone_offset_second = Some(val as i64)
                 }
                 if current_field != DateTimeField::Second {
                     current_field = current_field
