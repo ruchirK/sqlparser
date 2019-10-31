@@ -1,7 +1,7 @@
 use crate::ast::ParsedDateTime;
 use crate::parser::{DateTimeField, ParserError};
 
-pub(crate) fn tokenize_interval(value: &str) -> Result<Vec<IntervalToken>, ParserError> {
+pub(crate) fn tokenize_interval(value: &str, tokenize_timezone: bool) -> Result<Vec<IntervalToken>, ParserError> {
     let mut toks = vec![];
     let mut num_buf = String::with_capacity(4);
     fn parse_num(n: &str, idx: usize) -> Result<IntervalToken, ParserError> {
@@ -16,6 +16,7 @@ pub(crate) fn tokenize_interval(value: &str) -> Result<Vec<IntervalToken>, Parse
     for (i, chr) in value.chars().enumerate() {
         match chr {
             '-' => {
+                // TODO abstract away the number handling functionality to a function
                 // dashes at the beginning mean make it negative
                 if !num_buf.is_empty() {
                     toks.push(parse_num(&num_buf, i)?);
@@ -38,6 +39,20 @@ pub(crate) fn tokenize_interval(value: &str) -> Result<Vec<IntervalToken>, Parse
                 num_buf.clear();
                 toks.push(IntervalToken::Dot);
                 last_field_is_frac = true;
+            }
+            '+' => {
+                // Not sure if I need to do more to deal with the fractional bit
+                // TODO push the fractional processing bit to a function
+                if tokenize_timezone != true {
+                    // TODO Not sure if I need to throw this error here
+                    return Err(ParserError::TokenizerError(format!(
+                        "Invalid character at offset {} in {}: {:?}",
+                        i, value, chr
+                    )))
+                }
+                toks.push(parse_num(&num_buf, i)?);
+                num_buf.clear();
+                toks.push(IntervalToken::Plus);
             }
             chr if chr.is_digit(10) => num_buf.push(chr),
             chr => {
@@ -110,6 +125,7 @@ pub(crate) enum IntervalToken {
     Space,
     Colon,
     Dot,
+    Plus,
     Num(u64),
     Nanos(u32),
 }

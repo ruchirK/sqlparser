@@ -769,7 +769,7 @@ impl Parser {
                 "Interval date string is empty!".to_string(),
             ));
         }
-        let toks = datetime::tokenize_interval(value)?;
+        let toks = datetime::tokenize_interval(value, false)?;
         datetime::build_parsed_datetime(&toks, leading_field, value)
     }
 
