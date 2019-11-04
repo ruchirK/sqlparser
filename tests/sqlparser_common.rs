@@ -1358,7 +1358,8 @@ fn parse_literal_timestamp() {
                 hour: 1,
                 minute: 23,
                 second: 34,
-                nano: 0
+                nano: 0,
+                timezone_offset_second: 0
             }
         )),
         expr_from_projection(only(&select.projection)),
@@ -1376,7 +1377,8 @@ fn parse_literal_timestamp() {
                 hour: 1,
                 minute: 23,
                 second: 34,
-                nano: 555_000_000
+                nano: 555_000_000,
+                timezone_offset_second: 0
             }
         )),
         expr_from_projection(only(&select.projection)),
