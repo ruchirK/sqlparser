@@ -1,10 +1,11 @@
 use crate::ast::ParsedDateTime;
 use crate::parser::{DateTimeField, ParserError};
 
-pub(crate) fn tokenize_interval(value: &str, tokenize_timezone: bool) -> Result<Vec<IntervalToken>, ParserError> {
+pub(crate) fn tokenize_interval(value: &str, include_timezone: bool) -> Result<(Vec<IntervalToken>, Vec<IntervalToken>), ParserError> {
     let mut toks = vec![];
     let mut num_buf = String::with_capacity(4);
     fn parse_num(n: &str, idx: usize, is_fraction: bool) -> Result<IntervalToken, ParserError> {
+        // TODO need to check if n is empty
         if is_fraction == true {
             let raw: u32 = n.parse().map_err(|e| {
                 ParserError::ParserError(format!(
@@ -28,6 +29,7 @@ pub(crate) fn tokenize_interval(value: &str, tokenize_timezone: bool) -> Result<
     };
 
     let mut is_frac = false;
+    let mut after_time_value = false;
     for (i, chr) in value.chars().enumerate() {
         match chr {
             '-' => {
@@ -39,6 +41,7 @@ pub(crate) fn tokenize_interval(value: &str, tokenize_timezone: bool) -> Result<
                 }
                 toks.push(IntervalToken::Dash);
                 is_frac = false;
+                // TODO note that this + 'z' can also designate the start of a timezone
             }
             ' ' => {
                 toks.push(parse_num(&num_buf, i, is_frac)?);
@@ -51,6 +54,7 @@ pub(crate) fn tokenize_interval(value: &str, tokenize_timezone: bool) -> Result<
                 num_buf.clear();
                 toks.push(IntervalToken::Colon);
                 is_frac = false;
+                after_time_value = true;
             }
             '.' => {
                 toks.push(parse_num(&num_buf, i, is_frac)?);
@@ -61,17 +65,21 @@ pub(crate) fn tokenize_interval(value: &str, tokenize_timezone: bool) -> Result<
             '+' => {
                 // Not sure if I need to do more to deal with the fractional bit
                 // TODO push the fractional processing bit to a function
-                if tokenize_timezone != true {
+                if include_timezone != true || after_time_value != true {
                     // TODO Not sure if I need to throw this error here
                     return Err(ParserError::TokenizerError(format!(
                         "Invalid character at offset {} in {}: {:?}",
                         i, value, chr
                     )))
                 }
-                toks.push(parse_num(&num_buf, i, is_frac)?);
-                num_buf.clear();
-                toks.push(IntervalToken::Plus);
-                is_frac = false;
+
+                // TODO
+                // here I need to get a slice of the string from i..end
+                // and send it to a different function to parse the substring
+                // for timezone info
+                toks.push(parse_num(&num_buf, 0, is_frac)?);
+                let timezone_toks = tokenize_timezone(value.get(i..).unwrap_or(""))?;
+                return Ok((toks, timezone_toks));
             }
             chr if chr.is_digit(10) => num_buf.push(chr),
             chr => {
@@ -85,7 +93,7 @@ pub(crate) fn tokenize_interval(value: &str, tokenize_timezone: bool) -> Result<
     if !num_buf.is_empty() {
         toks.push(parse_num(&num_buf, 0, is_frac)?);
     }
-    Ok(toks)
+    Ok((toks, vec![]))
 }
 
 /// Get the tokens that you *might* end up parsing starting with a most significant unit
@@ -124,6 +132,52 @@ fn potential_interval_tokens(from: &DateTimeField) -> Vec<IntervalToken> {
         TimezoneOffsetSecond => 0,
     };
     all_toks[offset..].to_vec()
+}
+
+fn tokenize_timezone(value: &str) -> Result<Vec<IntervalToken>, ParserError> {
+    let mut toks = vec![];
+    let mut num_buf = String::with_capacity(4);
+    fn parse_num(n: &str, idx: usize) -> Result<IntervalToken, ParserError> {
+        Ok(IntervalToken::Num(n.parse().map_err(|e| {
+            ParserError::ParserError(format!(
+                "Unable to parse value as a number at index {}: {}",
+                idx, e
+            ))
+        })?))
+    };
+    for (i, chr) in value.chars().enumerate() {
+        match chr {
+            '-' => {
+                num_buf.clear();
+                toks.push(IntervalToken::Dash);
+            }
+            ' ' => {
+                toks.push(parse_num(&num_buf, i)?);
+                num_buf.clear();
+                toks.push(IntervalToken::Space);
+            }
+            ':' => {
+                toks.push(parse_num(&num_buf, i)?);
+                num_buf.clear();
+                toks.push(IntervalToken::Colon);
+            }
+            '+' => {
+                num_buf.clear();
+                toks.push(IntervalToken::Plus);
+            }
+            chr if chr.is_digit(10) => num_buf.push(chr),
+            chr => {
+                return Err(ParserError::TokenizerError(format!(
+                    "Invalid character at offset {} in {}: {:?}",
+                    i, value, chr
+                )))
+            }
+        }
+    }
+    if !num_buf.is_empty() {
+        toks.push(parse_num(&num_buf, 0)?);
+    }
+    Ok(toks)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
