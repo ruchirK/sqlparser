@@ -134,7 +134,7 @@ impl IntervalValue {
             DateTimeField::Minute => self.parsed.minute,
             DateTimeField::Second => self.parsed.second,
             // TODO trigger an error here
-            DateTimeField::TimezoneOffsetSecond => Some(0),
+            DateTimeField::TimezoneOffsetSecond => None,
         }
     }
 
@@ -372,7 +372,7 @@ impl IntoIterator for DateTimeField {
 /// assert_eq!(itr.next(), Some(Minute));
 /// assert_eq!(itr.next(), Some(Second));
 /// assert_eq!(itr.next(), Some(TimezoneOffsetSecond));
-/// assert_eq!(itr.next(), Some(TimezoneOffsetSecond));
+/// assert_eq!(itr.next(), None);
 /// ```
 pub struct DateTimeFieldIterator(Option<DateTimeField>);
 

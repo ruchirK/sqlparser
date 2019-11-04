@@ -179,7 +179,7 @@ mod test {
         use DateTimeField::*;
         assert_eq!(
             Year.into_iter().take(10).collect::<Vec<_>>(),
-            vec![Month, Day, Hour, Minute, Second]
+            vec![Month, Day, Hour, Minute, Second, TimezoneOffsetSecond]
         )
     }
 }
