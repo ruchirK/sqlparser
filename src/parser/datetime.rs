@@ -1,25 +1,25 @@
 use crate::ast::ParsedDateTime;
 use crate::parser::{DateTimeField, ParserError};
 
-pub(crate) fn tokenize_interval(value: &str, include_timezone: bool) -> Result<(Vec<IntervalToken>, Vec<IntervalToken>), ParserError> {
+pub(crate) fn tokenize_interval(
+    value: &str,
+    include_timezone: bool,
+) -> Result<(Vec<IntervalToken>, Vec<IntervalToken>), ParserError> {
     let mut toks = vec![];
     let mut num_buf = String::with_capacity(4);
     fn parse_num(n: &str, idx: usize, is_fraction: bool) -> Result<IntervalToken, ParserError> {
         // TODO need to check if n is empty
         if is_fraction == true {
             let raw: u32 = n.parse().map_err(|e| {
-                ParserError::ParserError(format!(
-                    "couldn't parse fraction of second {}: {}",
-                    n, e
-                ))
+                ParserError::ParserError(format!("couldn't parse fraction of second {}: {}", n, e))
             })?;
             // this is guaranteed to be ascii, so len is fine
             let chars = n.len() as u32;
             let multiplicand = 1_000_000_000 / 10_u32.pow(chars);
 
             return Ok(IntervalToken::Nanos(raw * multiplicand));
-       }
-            
+        }
+
         Ok(IntervalToken::Num(n.parse().map_err(|e| {
             ParserError::ParserError(format!(
                 "Unable to parse value as a number at index {}: {}",
@@ -70,7 +70,7 @@ pub(crate) fn tokenize_interval(value: &str, include_timezone: bool) -> Result<(
                     return Err(ParserError::TokenizerError(format!(
                         "Invalid character at offset {} in {}: {:?}",
                         i, value, chr
-                    )))
+                    )));
                 }
 
                 // TODO
@@ -134,6 +134,13 @@ fn potential_interval_tokens(from: &DateTimeField) -> Vec<IntervalToken> {
     all_toks[offset..].to_vec()
 }
 
+fn potential_timezone_tokens() -> Vec<IntervalToken> {
+    use IntervalToken::*;
+    let all = [Plus, Num(0), Colon, Num(0)];
+
+    all[..].to_vec()
+}
+
 fn tokenize_timezone(value: &str) -> Result<Vec<IntervalToken>, ParserError> {
     let mut toks = vec![];
     let mut num_buf = String::with_capacity(4);
@@ -195,6 +202,7 @@ pub(crate) fn build_parsed_datetime(
     tokens: &[IntervalToken],
     leading_field: &DateTimeField,
     value: &str,
+    timezone_tokens: &[IntervalToken],
 ) -> Result<ParsedDateTime, ParserError> {
     use IntervalToken::*;
 
@@ -245,7 +253,9 @@ pub(crate) fn build_parsed_datetime(
                         return parser_err!("Too many numbers to parse as a second at {}", val)
                     }
                     // TODO fix that
-                    DateTimeField::TimezoneOffsetSecond => pdt.timezone_offset_second = Some(val as i64)
+                    DateTimeField::TimezoneOffsetSecond => {
+                        pdt.timezone_offset_second = Some(val as i64)
+                    }
                 }
                 if current_field != DateTimeField::Second {
                     current_field = current_field
@@ -265,6 +275,56 @@ pub(crate) fn build_parsed_datetime(
                 )
             }
         }
+    }
+
+    if timezone_tokens.is_empty() != true {
+        let expected = potential_timezone_tokens(); // TODO add a arg for the tz tokens list here to select the right one
+        let mut actual = timezone_tokens.iter().peekable();
+
+        let is_positive = match actual.peek() {
+            Some(val) if val == &&IntervalToken::Dash => {
+                actual.next();
+                false
+            }
+            _ => true,
+        };
+
+        let mut hours_seen = false;
+        let mut minutes_seen = false;
+        let mut tz_offset: i64 = 0;
+
+        for (i, (atok, etok)) in actual.zip(&expected).enumerate() {
+            match (atok, etok) {
+                (Dash, Dash) | (Space, Space) | (Colon, Colon) | (Dot, Dot) => {
+                    /* matching punctuation */
+                }
+                (Num(val), Num(_)) => {
+                    if hours_seen == false {
+                        // TODO validate the range here
+                        tz_offset += (val * 24 * 60) as i64;
+                        hours_seen = true;
+                    } else if minutes_seen == false {
+                        tz_offset += (val * 60) as i64;
+                        minutes_seen = true;
+                    } // add extra error case TODO
+                }
+                (provided, expected) => {
+                    return parser_err!(
+                        "Invalid interval part at offset {}: '{}' provided {:?} but expected {:?}",
+                        i,
+                        value,
+                        provided,
+                        expected,
+                    )
+                }
+            }
+        }
+
+        if is_positive == false {
+            tz_offset *= -1;
+        }
+
+        pdt.timezone_offset_second = Some(tz_offset);
     }
 
     Ok(pdt)

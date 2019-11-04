@@ -769,8 +769,8 @@ impl Parser {
                 "Interval date string is empty!".to_string(),
             ));
         }
-        let (toks, _timezone_toks) = datetime::tokenize_interval(value, false)?;
-        datetime::build_parsed_datetime(&toks, leading_field, value)
+        let (toks, timezone_toks) = datetime::tokenize_interval(value, false)?;
+        datetime::build_parsed_datetime(&toks, leading_field, value, &timezone_toks)
     }
 
     /// Parses the parens following the `[ NOT ] IN` operator
@@ -1548,7 +1548,7 @@ impl Parser {
                 "TIMESTAMP" => {
                     if self.parse_keyword("WITH") {
                         self.expect_keywords(&["TIME", "ZONE"])?;
-                        return Ok(DataType::TimestampTz)
+                        return Ok(DataType::TimestampTz);
                     } else if self.parse_keyword("WITHOUT") {
                         self.expect_keywords(&["TIME", "ZONE"])?;
                     }
@@ -1557,7 +1557,7 @@ impl Parser {
                 "TIME" => {
                     if self.parse_keyword("WITH") {
                         self.expect_keywords(&["TIME", "ZONE"])?;
-                        return Ok(DataType::TimeTz)
+                        return Ok(DataType::TimeTz);
                     } else if self.parse_keyword("WITHOUT") {
                         self.expect_keywords(&["TIME", "ZONE"])?;
                     }
