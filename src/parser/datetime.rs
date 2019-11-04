@@ -295,13 +295,13 @@ pub(crate) fn build_parsed_datetime(
 
         for (i, (atok, etok)) in actual.zip(&expected).enumerate() {
             match (atok, etok) {
-                (Dash, Dash) | (Space, Space) | (Colon, Colon) | (Dot, Dot) => {
+                (Dash, Dash) | (Space, Space) | (Colon, Colon) | (Dot, Dot) | (Plus, Plus) => {
                     /* matching punctuation */
                 }
                 (Num(val), Num(_)) => {
                     if hours_seen == false {
                         // TODO validate the range here
-                        tz_offset += (val * 24 * 60) as i64;
+                        tz_offset += (val * 60 * 60) as i64;
                         hours_seen = true;
                     } else if minutes_seen == false {
                         tz_offset += (val * 60) as i64;
@@ -310,7 +310,7 @@ pub(crate) fn build_parsed_datetime(
                 }
                 (provided, expected) => {
                     return parser_err!(
-                        "Invalid interval part at offset {}: '{}' provided {:?} but expected {:?}",
+                        "Invalid interval time zone part at offset {}: '{}' provided {:?} but expected {:?}",
                         i,
                         value,
                         provided,

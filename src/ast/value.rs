@@ -79,7 +79,14 @@ impl fmt::Display for Value {
             Value::Boolean(v) => write!(f, "{}", v),
             Value::Date(v, _) => write!(f, "DATE '{}'", escape_single_quote_string(v)),
             Value::Time(v) => write!(f, "TIME '{}'", escape_single_quote_string(v)),
-            Value::Timestamp(v, _) => write!(f, "TIMESTAMP '{}'", escape_single_quote_string(v)),
+            Value::Timestamp(v, pt) => {
+                let tz_offset = pt.timezone_offset_second;
+                if tz_offset == 0 {
+                    write!(f, "TIMESTAMP '{}'", escape_single_quote_string(v))
+                } else {
+                    write!(f, "TIMESTAMP WITH TIME ZONE '{}'", escape_single_quote_string(v))
+                }
+            }
             Value::Interval(IntervalValue {
                 parsed: _,
                 value,
