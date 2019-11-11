@@ -515,7 +515,7 @@ impl Parser {
         } else if self.parse_keyword("WITHOUT") {
             self.expect_keywords(&["TIME", "ZONE"])?;
         }
-       Ok(Expr::Value(self.parse_timestamp_inner(false)?))
+        Ok(Expr::Value(self.parse_timestamp_inner(false)?))
     }
 
     fn parse_timestamp_inner(&mut self, parse_timezone: bool) -> Result<Value, ParserError> {
@@ -525,9 +525,25 @@ impl Parser {
         let pdt = Self::parse_interval_string(&value, &DateTimeField::Year, parse_timezone)?;
 
         match (
-            pdt.year, pdt.month, pdt.day, pdt.hour, pdt.minute, pdt.second, pdt.nano, pdt.timezone_offset_second,
+            pdt.year,
+            pdt.month,
+            pdt.day,
+            pdt.hour,
+            pdt.minute,
+            pdt.second,
+            pdt.nano,
+            pdt.timezone_offset_second,
         ) {
-            (Some(year), Some(month), Some(day), Some(hour), Some(minute), Some(second), nano, timezone_offset_second) => {
+            (
+                Some(year),
+                Some(month),
+                Some(day),
+                Some(hour),
+                Some(minute),
+                Some(second),
+                nano,
+                timezone_offset_second,
+            ) => {
                 let p_err = |e: std::num::TryFromIntError, field: &str| {
                     ParserError::ParserError(format!(
                         "{} in date '{}' is invalid: {}",
@@ -566,19 +582,35 @@ impl Parser {
                     parser_err!("Second in timestamp '{}' cannot be > 60: {}", value, second)?;
                 }
 
-                Ok(Value::Timestamp(
-                    value,
-                    ParsedTimestamp {
-                        year,
-                        month,
-                        day,
-                        hour,
-                        minute,
-                        second,
-                        nano: nano.unwrap_or(0),
-                        timezone_offset_second: timezone_offset_second.unwrap_or(0),
-                    },
-                ))
+                if parse_timezone == true {
+                    Ok(Value::TimestampTz(
+                        value,
+                        ParsedTimestamp {
+                            year,
+                            month,
+                            day,
+                            hour,
+                            minute,
+                            second,
+                            nano: nano.unwrap_or(0),
+                            timezone_offset_second: timezone_offset_second.unwrap_or(0),
+                        },
+                    ))
+                } else {
+                    Ok(Value::Timestamp(
+                        value,
+                        ParsedTimestamp {
+                            year,
+                            month,
+                            day,
+                            hour,
+                            minute,
+                            second,
+                            nano: nano.unwrap_or(0),
+                            timezone_offset_second: 0,
+                        },
+                    ))
+                }
             }
             _ => Err(ParserError::ParserError(format!(
                 "timestamp is missing fields, year through second are all required, got: '{}'",
@@ -1567,6 +1599,7 @@ impl Parser {
                     }
                     Ok(DataType::Timestamp)
                 }
+                "TIMESTAMPTZ" => Ok(DataType::TimestampTz),
                 "TIME" => {
                     if self.parse_keyword("WITH") {
                         self.expect_keywords(&["TIME", "ZONE"])?;

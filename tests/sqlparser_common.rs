@@ -1383,11 +1383,11 @@ fn parse_literal_timestamp() {
         )),
         expr_from_projection(only(&select.projection)),
     );
-    
+
     let sql = "SELECT TIMESTAMP WITH TIME ZONE '1999-01-01 01:23:34+1:30'";
     let select = verified_only_select(sql);
     assert_eq!(
-        &Expr::Value(Value::Timestamp(
+        &Expr::Value(Value::TimestampTz(
             "1999-01-01 01:23:34+1:30".into(),
             ParsedTimestamp {
                 year: 1999,
