@@ -213,6 +213,7 @@ impl Parser {
                 }),
                 "TIME" => Ok(Expr::Value(Value::Time(self.parse_literal_string()?))),
                 "TIMESTAMP" => self.parse_timestamp(),
+                "TIMESTAMPTZ" => self.parse_timestamptz(),
                 // Here `w` is a word, check if it's a part of a multi-part
                 // identifier, a function call, or a simple identifier:
                 _ => match self.peek_token() {
@@ -516,6 +517,10 @@ impl Parser {
             self.expect_keywords(&["TIME", "ZONE"])?;
         }
         Ok(Expr::Value(self.parse_timestamp_inner(false)?))
+    }
+
+    fn parse_timestamptz(&mut self) -> Result<Expr, ParserError> {
+        Ok(Expr::Value(self.parse_timestamp_inner(true)?))
     }
 
     fn parse_timestamp_inner(&mut self, parse_timezone: bool) -> Result<Value, ParserError> {
